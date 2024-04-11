@@ -1,0 +1,48 @@
+node {
+    checkout scm
+
+    def branch = env.BRANCH_NAME
+    def build = env.BUILD_NUMBER
+    def image
+    def repository = "iam21h/mqtt-data-exporter"
+    def image_name = "${repository}"
+    def commit_hash = checkout(scm).GIT_COMMIT
+    def version
+
+    stage("Read version from file") {
+        try {
+            version = readFile file: "VERSION"
+            echo "Detected version: ${version}"
+            image_name = "${repository}:${version}"
+        } catch (Exception e) {
+            error("Failed to read version from file")
+        }
+    }
+
+    stage("Build Image") {
+        try {
+            sh "docker build -t ${image_name} ."
+            image = docker.image(image_name)
+        } catch (Exception e) {
+            error("Failed to build image")
+        }
+    }
+
+    if (branch == 'master') {
+        stage("Push Image") {
+            try {
+
+                docker.withRegistry("", "dockerhub") {
+                    image.push()
+                }
+
+            } catch(Exception e) {
+                echo "${e}"
+                error("Failed to push image")
+            } finally {
+                // cleanup
+                sh "docker rmi ${image_name} || true"
+            }
+        }
+    }
+}

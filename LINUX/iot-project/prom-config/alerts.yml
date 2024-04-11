@@ -1,0 +1,21 @@
+groups:
+- name: High-Temperature
+  rules:
+  - alert: High-Temperature
+    expr: (temperature) > 50
+    for: 1m
+    labels:
+      severity: warning
+    annotations:
+      summary: High Temperature
+
+- name: Low-Temperature
+  rules:
+  - alert: Low-Temperature
+    expr: (temperature) > 5
+    for: 1m
+    labels:
+      severity: warning
+    annotations:
+      summary: Low Temperature
+      

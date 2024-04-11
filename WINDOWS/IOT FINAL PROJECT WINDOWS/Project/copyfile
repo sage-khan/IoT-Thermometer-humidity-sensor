@@ -1,0 +1,123 @@
+var express = require("express");
+var cors = require("cors");
+var morgan = require("morgan");
+var app = express();
+var http = require("http");
+var server = http.createServer(app);
+const mqtt = require("mqtt");
+const cookieParser = require("cookie-parser");
+const { PORT } = require("./cors/index");
+
+/**
+ * Set mysql configuration parameters
+ */
+const mysql = require('mysql2')
+let connection = mysql.createConnection({
+  host: 'localhost',
+  user: 'root',
+  password: 'root',
+  database: 'fridge'
+})
+
+//Connect to mysql datbase
+connection.connect(function(err){
+  if(err){
+    console.log("Failed to connect to mysql db ", err)
+    throw err
+  }
+  else{
+    console.log("Database connected")
+  }
+});
+
+app.use(express.json());
+
+app.use(
+  cors({
+    origin: true,
+  })
+);
+
+app.use(morgan("dev"));
+app.use(cors());
+app.use(cookieParser());
+
+
+// MQTT configuration //
+const topicTemprature = "esp32/dht/temperature";
+const topicHumidity = "esp32/dht/humidity";
+const host = "127.0.0.1";
+const port = "1883";
+const connectUrl = `mqtt://${host}:${port}`;
+
+//Connection configutaion for MQTT
+const client = mqtt.connect(connectUrl, {
+  clientId: `mqtt_${Math.random().toString(16).slice(3)}`,
+  username: "",
+  password: "",
+  reconnectPeriod: 1000,
+  keepalive: 1000,
+  clear: true,
+  reconnectPeriod: 1000,
+  protocolVersion: 4,
+  clean: true,
+});
+
+//Connect to MQTT
+client.on("connect", () => {
+  console.log("Connected");
+  client.subscribe(topicTemprature, () => {
+    console.log(`Subscribe to topic '${topicTemprature}'`);
+  });
+  client.subscribe(topicHumidity, () => {
+    console.log(`Subscribe to topic '${topicHumidity}'`);
+  });
+});
+
+//Recieve message from MQTT
+client.on("message", function (topic, message) {
+  let temperature = 0;
+  let humidity = 0;
+  if (topic === topicTemprature) {
+    temperature = message.toString();
+    console.log("Temperature", temperature);
+    console.log("Message temprature", message.toString());
+  }
+  if (topic === topicHumidity) {
+    humidity = message.toString();
+    console.log("Humidity", humidity);
+    console.log("Message humidity", message.toString());
+  }
+ 
+  //Saving tempratures into DB
+    connection.query(`INSERT INTO temperature (humidity, temperature) VALUES (${humidity}, ${temperature})`, (err) => {
+      if(err){
+        console.log("Failed to save data into db")
+        console.log(err)
+      } else {
+        console.log("Successfully saved data into DB")
+      }
+    })
+   
+  client.end();
+  return;
+});
+ 
+ app.get("/roomtemperature", (req, res, next) => {
+  //Fetching tempratures from DB
+  connection.query(`SELECT * FROM temperature ORDER BY id DESC LIMIT 2 `, (err,data) => {
+    if(err){
+      console.log("Failed to fetch data from DB")
+      console.log(err)
+    } else {
+      console.log("Records",data)
+      console.log("Successfully data fetched from DB")
+      res.status(200).send(data)
+    }
+  })
+});
+
+// Server listening 
+server.listen(PORT, () => {
+  console.log("Server is Running:", PORT);
+});

@@ -1,0 +1,11 @@
+version: '3.5'
+services:
+  nodejs:
+    container-name: node-js-application
+    image: nodejs-application
+networks:
+  default:
+    external: 
+      name: project-containers-network
+
+  
